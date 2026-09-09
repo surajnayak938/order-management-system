@@ -1,16 +1,18 @@
 package com.suraj.order_service.service;
 
+import com.suraj.order_service.dto.InventoryResponseDTO;
 import com.suraj.order_service.dto.OrderLineItemsDto;
 import com.suraj.order_service.dto.OrderRequest;
 import com.suraj.order_service.model.Order;
 import com.suraj.order_service.model.OrderLineItems;
 import com.suraj.order_service.repository.OrderRepository;
-import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.reactive.function.client.WebClient;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 
@@ -21,6 +23,7 @@ import java.util.UUID;
 public class OrderService {
 
     private final OrderRepository orderRepository;
+    private final WebClient webClient;
 
     public void placeOrder(OrderRequest orderRequest){
         Order order = new Order();
@@ -29,8 +32,24 @@ public class OrderService {
         List<OrderLineItems> orderLineItemsList = orderRequest.getOrderLineItemsDtoList().stream().map(this::mapToDto).toList();
         order.setOrderLineItemsList(orderLineItemsList);
 
-        orderRepository.save(order);
-        log.info("Order placed successfully");
+        List<String> skuCodes = order.getOrderLineItemsList().stream().map(OrderLineItems::getSkuCode).toList();
+
+        //call inventory Service, and place order only if product is available in inventory
+        InventoryResponseDTO[] inventoryResponseDTOS = webClient.
+                get().
+                uri("http://localhost:8082/api/inventory",
+                        uriBuilder -> uriBuilder.queryParam("skuCode", skuCodes).build()).
+                retrieve().
+                bodyToMono(InventoryResponseDTO[].class).
+                block();
+
+        assert inventoryResponseDTOS != null;
+        boolean allProductsInStock = Arrays.stream(inventoryResponseDTOS).allMatch(InventoryResponseDTO::isInStock);
+        if(allProductsInStock){
+            orderRepository.save(order);
+        }else {
+            throw new IllegalArgumentException("Product is not in stock, please try again later");
+        }
     }
 
     private OrderLineItems mapToDto(OrderLineItemsDto orderLineItemsDto) {

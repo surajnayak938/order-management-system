@@ -28,7 +28,7 @@ class InventoryServiceApplicationTests {
 				.extracting("skuCode", "quantity")
 				.containsExactlyInAnyOrder(
 						tuple("iphone_13", 100),
-						tuple("iPhone_13_red", 0));
+						tuple("iPhone_13_red", 50));
 	}
 
 	@Test
@@ -44,7 +44,7 @@ class InventoryServiceApplicationTests {
 				.extracting("skuCode", "quantity")
 				.containsExactlyInAnyOrder(
 						tuple("iphone_13", 42),
-						tuple("iPhone_13_red", 0));
+						tuple("iPhone_13_red", 50));
 	}
 
 	@Test
@@ -59,7 +59,7 @@ class InventoryServiceApplicationTests {
 				.extracting("skuCode", "quantity")
 				.containsExactlyInAnyOrder(
 						tuple("iphone_13", 100),
-						tuple("iPhone_13_red", 0));
+						tuple("iPhone_13_red", 50));
 	}
 
 }

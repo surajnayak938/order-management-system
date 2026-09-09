@@ -18,7 +18,7 @@ public class InventoryServiceApplication {
 	public CommandLineRunner loadData(InventoryRepository inventoryRepository){
 		return args -> {
 			seedInventoryIfMissing(inventoryRepository, "iphone_13", 100);
-			seedInventoryIfMissing(inventoryRepository, "iPhone_13_red", 0);
+			seedInventoryIfMissing(inventoryRepository, "iPhone_13_red", 50);
 		};
 	}
 
