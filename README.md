@@ -1,9 +1,7 @@
 # Order Management System
 
-Three Spring Boot services built together as a Maven multi-module project in `microservices-new/`.
-
-The original top-level service folders are retained temporarily; use
-`microservices-new/` for the multi-module build.
+Three Spring Boot services built together from the repository root as a Maven
+multi-module project: `com.suraj:order-management-system:1.0-SNAPSHOT`.
 
 ## Modules
 
@@ -21,7 +19,6 @@ integration tests, which start a temporary MongoDB container. Order and inventor
 tests use temporary H2 databases.
 
 ```sh
-cd microservices-new
 ./mvnw clean verify
 ```
 
@@ -29,7 +26,7 @@ On Windows, use `mvnw.cmd` instead of `./mvnw`.
 
 ## Run a service
 
-From `microservices-new/`, run one of these commands in a separate terminal:
+From the repository root, run one of these commands in a separate terminal:
 
 ```sh
 ./mvnw -pl product-service spring-boot:run
@@ -45,6 +42,6 @@ Override the product database URI with `SPRING_MONGODB_URI`.
 
 ## IntelliJ IDEA
 
-Open `microservices-new/pom.xml` as a project, or link it through the Maven tool
+Open the root `pom.xml` as a project, or link it through the Maven tool
 window. It imports all three modules automatically. Unlink any old standalone
 service POMs if you continue using the existing IDE window.
