@@ -1,32 +1,50 @@
 # Order Management System
 
-A Java and Spring Boot microservices project under development.
+Three Spring Boot services built together as a Maven multi-module project in `microservices-new/`.
 
-## Services
+The original top-level service folders are retained temporarily; use
+`microservices-new/` for the multi-module build.
 
-- `product-service/`: Product creation and persistence using MongoDB.
-- Order and inventory services are planned.
+## Modules
 
-Each service is maintained in its own directory and can be built independently.
+| Module | HTTP port | Database |
+| --- | --- | --- |
+| product-service | 8080 | MongoDB: product-service |
+| order-service | 8081 | MySQL: order-service |
+| inventory-service | 8082 | MySQL: inventory-service |
 
-## Run the product service locally
+## Build and test
 
-Requirements: JDK 17 or later and MongoDB running locally on port 27017.
-The included Maven wrapper downloads Maven as needed.
-
-```sh
-cd product-service
-./mvnw clean install
-./mvnw spring-boot:run
-```
-
-The service uses `mongodb://localhost:27017/product-service` and the default HTTP port `8080`.
-Override the database connection using the `SPRING_MONGODB_URI` environment variable.
-
-On macOS, if MongoDB Community 8.0 is installed through Homebrew:
+Use JDK 17 or later. The parent POM sets the Java release to 17 for every module.
+The Maven wrapper downloads Maven as needed. Docker must be running for the product
+integration tests, which start a temporary MongoDB container. Order and inventory
+tests use temporary H2 databases.
 
 ```sh
-brew services start mongodb-community@8.0
+cd microservices-new
+./mvnw clean verify
 ```
 
-MongoDB Compass can connect to `mongodb://localhost:27017` to browse collections and documents.
+On Windows, use `mvnw.cmd` instead of `./mvnw`.
+
+## Run a service
+
+From `microservices-new/`, run one of these commands in a separate terminal:
+
+```sh
+./mvnw -pl product-service spring-boot:run
+./mvnw -pl order-service spring-boot:run
+./mvnw -pl inventory-service spring-boot:run
+```
+
+For application startup, MongoDB must be available at `localhost:27017` and MySQL
+at `localhost:3306`. Create the `order-service` and `inventory-service` MySQL
+databases first. The local MySQL defaults are username `root` and an empty password;
+override them with `SPRING_DATASOURCE_USERNAME` and `SPRING_DATASOURCE_PASSWORD`.
+Override the product database URI with `SPRING_MONGODB_URI`.
+
+## IntelliJ IDEA
+
+Open `microservices-new/pom.xml` as a project, or link it through the Maven tool
+window. It imports all three modules automatically. Unlink any old standalone
+service POMs if you continue using the existing IDE window.
