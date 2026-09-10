@@ -8,6 +8,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
+import org.springframework.test.context.bean.override.convention.TestBean;
+import org.springframework.web.reactive.function.client.ClientResponse;
+import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.util.UriComponentsBuilder;
+import reactor.core.publisher.Mono;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,6 +31,27 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @ActiveProfiles("test")
 @Transactional
 class OrderServiceApplicationTests {
+
+    @TestBean(methodName = "inventoryWebClient")
+    private WebClient webClient;
+
+    // Replace only the HTTP transport: retain real request construction and JSON decoding.
+    static WebClient inventoryWebClient() {
+        return WebClient.builder().exchangeFunction(request -> {
+            assertThat(request.method()).isEqualTo(HttpMethod.GET);
+            assertThat(request.url().getPath()).isEqualTo("/api/inventory");
+            assertThat(UriComponentsBuilder.fromUri(request.url()).build()
+                    .getQueryParams().get("skuCode"))
+                    .containsExactly("i_Phone_13", "phone_case");
+            return Mono.just(ClientResponse.create(HttpStatus.OK)
+                    .header("Content-Type", MediaType.APPLICATION_JSON_VALUE)
+                    .body("""
+                            [{"skuCode":"i_Phone_13","inStock":true},
+                             {"skuCode":"phone_case","inStock":true}]
+                            """)
+                    .build());
+        }).build();
+    }
 
     @Autowired
     private MockMvc mockMvc;

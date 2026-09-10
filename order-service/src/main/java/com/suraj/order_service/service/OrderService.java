@@ -37,7 +37,7 @@ public class OrderService {
         //call inventory Service, and place order only if product is available in inventory
         InventoryResponseDTO[] inventoryResponseDTOS = webClient.
                 get().
-                uri("http://localhost:8082/api/inventory",
+                uri("http://inventory-service/api/inventory",
                         uriBuilder -> uriBuilder.queryParam("skuCode", skuCodes).build()).
                 retrieve().
                 bodyToMono(InventoryResponseDTO[].class).
