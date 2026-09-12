@@ -21,7 +21,7 @@ class InventoryResponseDTOTest {
     @Test
     void serializesStockFlagWithTheSameNameUsedForDecoding() {
         for (boolean stock : new boolean[]{true, false}) {
-            String json = mapper.writeValueAsString(new InventoryResponseDTO("phone", stock));
+            String json = mapper.writeValueAsString(new InventoryResponseDTO("phone", stock, stock ? 100 : 0));
             assertThat(mapper.readTree(json).get("inStock").asBoolean()).isEqualTo(stock);
             assertThat(mapper.readTree(json).has("isInStock")).isFalse();
             assertThat(mapper.readValue(json, InventoryResponseDTO.class).isInStock()).isEqualTo(stock);

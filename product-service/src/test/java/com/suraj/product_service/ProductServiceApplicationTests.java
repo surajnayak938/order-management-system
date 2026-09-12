@@ -1,6 +1,7 @@
 package com.suraj.product_service;
 
 import com.suraj.product_service.dto.ProductRequest;
+import com.suraj.product_service.dto.ProductResponse;
 import com.suraj.product_service.model.Product;
 import com.suraj.product_service.repository.ProductRepository;
 import org.junit.jupiter.api.Test;
@@ -87,8 +88,8 @@ class ProductServiceApplicationTests {
 
 		String json = mockMvc.perform(MockMvcRequestBuilders.get("/api/product"))
 				.andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-		var responses = objectMapper.readValue(json, com.suraj.product_service.dto.ProductResponse[].class);
-		assertThat(responses).extracting(com.suraj.product_service.dto.ProductResponse::getId)
+		var responses = objectMapper.readValue(json, ProductResponse[].class);
+		assertThat(responses).extracting(ProductResponse::getId)
 				.containsExactlyInAnyOrder(first.getId(), second.getId());
 	}
 

@@ -11,9 +11,13 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
+import java.util.LinkedHashMap;
 import java.util.UUID;
 
 @Service
@@ -26,13 +30,25 @@ public class OrderService {
     private final WebClient webClient;
 
     public void placeOrder(OrderRequest orderRequest){
+        Map<String, Long> requestedQuantities = new LinkedHashMap<>();
+        if (orderRequest.getOrderLineItemsDtoList() == null || orderRequest.getOrderLineItemsDtoList().isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Order must contain items");
+        }
+        for (OrderLineItemsDto item : orderRequest.getOrderLineItemsDtoList()) {
+            if (item == null || item.getSkuCode() == null || item.getSkuCode().isBlank()
+                    || item.getQuantity() == null || item.getQuantity() <= 0) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Each item must have a SKU and a positive quantity");
+            }
+            requestedQuantities.merge(item.getSkuCode(), item.getQuantity().longValue(), Long::sum);
+        }
         Order order = new Order();
         order.setOrderNumber(UUID.randomUUID().toString());
 
         List<OrderLineItems> orderLineItemsList = orderRequest.getOrderLineItemsDtoList().stream().map(this::mapToDto).toList();
         order.setOrderLineItemsList(orderLineItemsList);
 
-        List<String> skuCodes = order.getOrderLineItemsList().stream().map(OrderLineItems::getSkuCode).toList();
+        List<String> skuCodes = List.copyOf(requestedQuantities.keySet());
 
         //call inventory Service, and place order only if product is available in inventory
         InventoryResponseDTO[] inventoryResponseDTOS = webClient.
@@ -43,12 +59,16 @@ public class OrderService {
                 bodyToMono(InventoryResponseDTO[].class).
                 block();
 
-        assert inventoryResponseDTOS != null;
-        boolean allProductsInStock = Arrays.stream(inventoryResponseDTOS).allMatch(InventoryResponseDTO::isInStock);
+        boolean allProductsInStock = !skuCodes.isEmpty() && inventoryResponseDTOS != null
+                && skuCodes.stream().allMatch(sku -> Arrays.stream(inventoryResponseDTOS)
+                    .anyMatch(item -> item != null && sku.equals(item.getSkuCode()) && item.isInStock()
+                            && item.getAvailableQuantity() != null
+                            && item.getAvailableQuantity().longValue() >= requestedQuantities.get(sku)));
         if(allProductsInStock){
             orderRepository.save(order);
         }else {
-            throw new IllegalArgumentException("Product is not in stock, please try again later");
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "One or more products are missing from inventory or have insufficient stock");
         }
     }
 

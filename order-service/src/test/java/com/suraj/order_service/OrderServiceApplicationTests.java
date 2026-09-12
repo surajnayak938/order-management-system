@@ -4,6 +4,10 @@ import com.suraj.order_service.model.Order;
 import com.suraj.order_service.repository.OrderRepository;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import java.util.concurrent.atomic.AtomicReference;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -25,12 +29,23 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 @Transactional
 class OrderServiceApplicationTests {
+
+    private static final AtomicReference<String> inventoryResponse = new AtomicReference<>();
+
+    @BeforeEach
+    void resetInventoryResponse() {
+        inventoryResponse.set("""
+                [{"skuCode":"i_Phone_13","inStock":true,"availableQuantity":100},
+                 {"skuCode":"phone_case","inStock":true,"availableQuantity":100}]
+                """);
+    }
 
     @TestBean(methodName = "inventoryWebClient")
     private WebClient webClient;
@@ -43,13 +58,12 @@ class OrderServiceApplicationTests {
             assertThat(UriComponentsBuilder.fromUri(request.url()).build()
                     .getQueryParams().get("skuCode"))
                     .containsExactly("i_Phone_13", "phone_case");
-            return Mono.just(ClientResponse.create(HttpStatus.OK)
-                    .header("Content-Type", MediaType.APPLICATION_JSON_VALUE)
-                    .body("""
-                            [{"skuCode":"i_Phone_13","inStock":true},
-                             {"skuCode":"phone_case","inStock":true}]
-                            """)
-                    .build());
+            ClientResponse.Builder response = ClientResponse.create(HttpStatus.OK)
+                    .header("Content-Type", MediaType.APPLICATION_JSON_VALUE);
+            if (!inventoryResponse.get().isEmpty()) {
+                response.body(inventoryResponse.get());
+            }
+            return Mono.just(response.build());
         }).build();
     }
 
@@ -119,6 +133,64 @@ class OrderServiceApplicationTests {
                 .hasSize(2)
                 .extracting(Order::getOrderNumber)
                 .doesNotHaveDuplicates();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "[{\"skuCode\":\"i_Phone_13\",\"inStock\":true,\"availableQuantity\":100}]",
+            "[]",
+            "",
+            "[{\"skuCode\":\"i_Phone_13\",\"inStock\":true,\"availableQuantity\":100},{\"skuCode\":\"phone_case\",\"inStock\":false}]",
+            "[{\"skuCode\":\"i_Phone_13\",\"inStock\":true,\"availableQuantity\":100},{\"skuCode\":\"unrequested\",\"inStock\":true,\"availableQuantity\":100}]"
+    })
+    void unavailableOrMissingInventoryRejectsEntireOrder(String response) throws Exception {
+        inventoryResponse.set(response);
+        mockMvc.perform(post("/api/order")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(VALID_ORDER))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.detail").value(
+                        "One or more products are missing from inventory or have insufficient stock"));
+        entityManager.flush();
+        assertThat(orderRepository.count()).isZero();
+    }
+
+    @Test
+    void exactAvailableQuantityIsAccepted() throws Exception {
+        mockMvc.perform(post("/api/order").contentType(MediaType.APPLICATION_JSON)
+                        .content(VALID_ORDER.replace("\"quantity\": 2", "\"quantity\": 100")))
+                .andExpect(status().isCreated());
+        assertThat(orderRepository.count()).isEqualTo(1);
+    }
+
+    @Test
+    void quantityAboveAvailableStockRejectsEntireOrder() throws Exception {
+        mockMvc.perform(post("/api/order").contentType(MediaType.APPLICATION_JSON)
+                        .content(VALID_ORDER.replace("\"quantity\": 2", "\"quantity\": 101")))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.detail").value(
+                        "One or more products are missing from inventory or have insufficient stock"));
+        assertThat(orderRepository.count()).isZero();
+    }
+
+    @Test
+    void repeatedSkuQuantitiesAreAddedBeforeCheckingStock() throws Exception {
+        String order = VALID_ORDER.replace("\"quantity\": 2}",
+                "\"quantity\": 60}, {\"skuCode\":\"phone_case\",\"price\":19.99,\"quantity\":60}");
+        mockMvc.perform(post("/api/order").contentType(MediaType.APPLICATION_JSON).content(order))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.detail").value(
+                        "One or more products are missing from inventory or have insufficient stock"));
+        assertThat(orderRepository.count()).isZero();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"0", "-1", "null"})
+    void invalidQuantityIsRejected(String quantity) throws Exception {
+        mockMvc.perform(post("/api/order").contentType(MediaType.APPLICATION_JSON)
+                        .content(VALID_ORDER.replace("\"quantity\": 2", "\"quantity\": " + quantity)))
+                .andExpect(status().isBadRequest());
+        assertThat(orderRepository.count()).isZero();
     }
 
     @Test

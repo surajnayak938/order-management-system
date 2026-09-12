@@ -12,4 +12,5 @@ import lombok.NoArgsConstructor;
 public class InventoryResponseDTO {
     private String skuCode;
     private boolean inStock;
+    private Integer availableQuantity;
 }

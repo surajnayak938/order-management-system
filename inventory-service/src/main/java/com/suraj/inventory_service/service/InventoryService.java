@@ -19,6 +19,7 @@ public class InventoryService {
          return inventoryRepository.findBySkuCodeIn(skuCode).stream().map(
                  inventory ->
                      InventoryResponseDTO.builder().skuCode(inventory.getSkuCode())
-                             .inStock(inventory.getQuantity() > 0).build()).toList();
+                             .availableQuantity(inventory.getQuantity())
+                             .inStock(inventory.getQuantity() != null && inventory.getQuantity() > 0).build()).toList();
     }
 }

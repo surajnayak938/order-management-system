@@ -2,6 +2,8 @@ package com.suraj.inventory_service;
 
 import com.suraj.inventory_service.repository.InventoryRepository;
 import org.junit.jupiter.api.Test;
+import com.suraj.inventory_service.service.InventoryService;
+import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -20,7 +22,22 @@ class InventoryServiceApplicationTests {
 	private InventoryRepository inventoryRepository;
 
 	@Autowired
+	private InventoryService inventoryService;
+
+	@Autowired
 	private CommandLineRunner loadData;
+
+    @Test
+    void inventoryResponseReportsCurrentDatabaseQuantity() {
+        var inventory = inventoryRepository.findBySkuCode("iphone_13").orElseThrow();
+        inventory.setQuantity(7);
+        inventoryRepository.saveAndFlush(inventory);
+        assertThat(inventoryService.isInStock(List.of("iphone_13"))).singleElement()
+                .satisfies(response -> {
+                    assertThat(response.getAvailableQuantity()).isEqualTo(7);
+                    assertThat(response.isInStock()).isTrue();
+                });
+    }
 
 	@Test
 	void startupLoadsBothProductsWithTheirExpectedQuantities() {
