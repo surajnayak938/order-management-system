@@ -8,6 +8,7 @@ import io.github.resilience4j.timelimiter.annotation.TimeLimiter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.concurrent.CompletableFuture;
@@ -21,23 +22,24 @@ public class OrderController {
     private final OrderService orderService;
 
     @PostMapping
-    @ResponseStatus(HttpStatus.CREATED)
     @CircuitBreaker(name = "inventory", fallbackMethod = "fallbackMethod")
     @TimeLimiter(name="inventory")
     @Retry(name="inventory")
-    public CompletableFuture<String> placeOrder(@RequestBody OrderRequest orderRequest){
+    public CompletableFuture<ResponseEntity<String>> placeOrder(@RequestBody OrderRequest orderRequest){
         log.info(orderRequest.toString());
-        return orderService.placeOrder(orderRequest);
+        return orderService.placeOrder(orderRequest)
+                .thenApply(message -> ResponseEntity.status(HttpStatus.CREATED).body(message));
     }
 
-    public CompletableFuture<String> fallbackMethod(OrderRequest orderRequest, Throwable throwable){
+    public CompletableFuture<ResponseEntity<String>> fallbackMethod(OrderRequest orderRequest, Throwable throwable){
         Throwable cause = throwable;
         while (cause != null) {
             if (cause instanceof org.springframework.web.server.ResponseStatusException responseStatusException) {
-                throw responseStatusException;
+                return CompletableFuture.failedFuture(responseStatusException);
             }
             cause = cause.getCause();
         }
-        return CompletableFuture.supplyAsync(()->"Oops! Something went wrong, Please order after some time!");
+        return CompletableFuture.completedFuture(ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body("Oops! Something went wrong, Please order after some time!"));
     }
 }

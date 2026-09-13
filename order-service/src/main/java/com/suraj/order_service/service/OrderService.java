@@ -6,6 +6,8 @@ import com.suraj.order_service.dto.OrderRequest;
 import com.suraj.order_service.model.Order;
 import com.suraj.order_service.model.OrderLineItems;
 import com.suraj.order_service.repository.OrderRepository;
+import io.micrometer.tracing.Span;
+import io.micrometer.tracing.Tracer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -29,8 +31,13 @@ public class OrderService {
 
     private final OrderRepository orderRepository;
     private final WebClient webClient;
+    private final Tracer tracer;
 
     public CompletableFuture<String> placeOrder(OrderRequest orderRequest){
+        return CompletableFuture.supplyAsync(() -> placeOrderSynchronously(orderRequest));
+    }
+
+    private String placeOrderSynchronously(OrderRequest orderRequest) {
         Map<String, Long> requestedQuantities = new LinkedHashMap<>();
         if (orderRequest.getOrderLineItemsDtoList() == null || orderRequest.getOrderLineItemsDtoList().isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Order must contain items");
@@ -51,26 +58,34 @@ public class OrderService {
 
         List<String> skuCodes = List.copyOf(requestedQuantities.keySet());
 
-        //call inventory Service, and place order only if product is available in inventory
-        InventoryResponseDTO[] inventoryResponseDTOS = webClient.
-                get().
-                uri("http://inventory-service/api/inventory",
-                        uriBuilder -> uriBuilder.queryParam("skuCode", skuCodes).build()).
-                retrieve().
-                bodyToMono(InventoryResponseDTO[].class).
-                block();
+        log.info("Calling inventory service");
 
-        boolean allProductsInStock = !skuCodes.isEmpty() && inventoryResponseDTOS != null
-                && skuCodes.stream().allMatch(sku -> Arrays.stream(inventoryResponseDTOS)
+        Span invenoryServiceLookup = tracer.nextSpan().name("InventoryServiceLookup");
+
+        try(Tracer.SpanInScope spanInScope = tracer.withSpan(invenoryServiceLookup.start())){
+            //call inventory Service, and place order only if product is available in inventory
+            InventoryResponseDTO[] inventoryResponseDTOS = webClient.
+                    get().
+                    uri("http://inventory-service/api/inventory",
+                            uriBuilder -> uriBuilder.queryParam("skuCode", skuCodes).build()).
+                    retrieve().
+                    bodyToMono(InventoryResponseDTO[].class).
+                    block();
+
+            boolean allProductsInStock = !skuCodes.isEmpty() && inventoryResponseDTOS != null
+                    && skuCodes.stream().allMatch(sku -> Arrays.stream(inventoryResponseDTOS)
                     .anyMatch(item -> item != null && sku.equals(item.getSkuCode()) && item.isInStock()
                             && item.getAvailableQuantity() != null
                             && item.getAvailableQuantity().longValue() >= requestedQuantities.get(sku)));
-        if(allProductsInStock){
-            orderRepository.save(order);
-            return CompletableFuture.supplyAsync(()->"Order Placed Successfully!!");
-        }else {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "One or more products are missing from inventory or have insufficient stock");
+            if(allProductsInStock){
+                orderRepository.save(order);
+                return "Order Placed Successfully!!";
+            }else {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "One or more products are missing from inventory or have insufficient stock");
+            }
+        }finally {
+            invenoryServiceLookup.end();
         }
     }
 
