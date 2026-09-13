@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.LinkedHashMap;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 @Service
 @RequiredArgsConstructor
@@ -29,7 +30,7 @@ public class OrderService {
     private final OrderRepository orderRepository;
     private final WebClient webClient;
 
-    public void placeOrder(OrderRequest orderRequest){
+    public CompletableFuture<String> placeOrder(OrderRequest orderRequest){
         Map<String, Long> requestedQuantities = new LinkedHashMap<>();
         if (orderRequest.getOrderLineItemsDtoList() == null || orderRequest.getOrderLineItemsDtoList().isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Order must contain items");
@@ -66,6 +67,7 @@ public class OrderService {
                             && item.getAvailableQuantity().longValue() >= requestedQuantities.get(sku)));
         if(allProductsInStock){
             orderRepository.save(order);
+            return CompletableFuture.supplyAsync(()->"Order Placed Successfully!!");
         }else {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "One or more products are missing from inventory or have insufficient stock");

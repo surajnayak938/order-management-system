@@ -28,7 +28,7 @@ class InventoryServiceApplicationTests {
 	private CommandLineRunner loadData;
 
     @Test
-    void inventoryResponseReportsCurrentDatabaseQuantity() {
+    void inventoryResponseReportsCurrentDatabaseQuantity() throws InterruptedException {
         var inventory = inventoryRepository.findBySkuCode("iphone_13").orElseThrow();
         inventory.setQuantity(7);
         inventoryRepository.saveAndFlush(inventory);
